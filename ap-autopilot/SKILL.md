@@ -83,6 +83,15 @@ Merge is always gated regardless of preset.
 
 ## On Activation
 
-Load available config from `{project-root}/_bmad/config.yaml` and `{project-root}/_bmad/config.user.yaml` (root level and `ap` section). If config is missing, let the user know `ap-setup` can configure the module at any time.
+Parse the user's intent and arguments, then run the appropriate command directly using Bash. The script path is `.claude/skills/ap-autopilot/scripts/autopilot.py` relative to the project root.
 
-If the user invokes this as a Claude skill rather than running the script directly, inform them this is a standalone script and provide the usage commands above.
+**Routing:**
+
+- "run autopilot" / "start autopilot" with no args → `uv run .claude/skills/ap-autopilot/scripts/autopilot.py run`
+- "run autopilot" + epic reference → `uv run .claude/skills/ap-autopilot/scripts/autopilot.py run --epic <epic>`
+- "run autopilot" + story reference → `uv run .claude/skills/ap-autopilot/scripts/autopilot.py run --story <story-id>`
+- "autopilot configure" / "configure autopilot" → `uv run .claude/skills/ap-autopilot/scripts/autopilot.py configure` with any flags the user provided
+- "autopilot status" → `uv run .claude/skills/ap-autopilot/scripts/autopilot.py status`
+- "resume autopilot" → `uv run .claude/skills/ap-autopilot/scripts/autopilot.py resume`
+
+If `_bmad/_autopilot.yaml` does not exist or has no `telegram_bot_token`, let the user know they need to run `/ap-setup` first.
