@@ -32,20 +32,47 @@ Then run the setup skill in Claude:
 /ap-setup
 ```
 
+## Telegram Setup
+
+The autopilot uses Telegram to notify you and ask for approval at gates.
+
+1. Open Telegram, search for **@BotFather**
+2. Send `/newbot`, give it a name and username
+3. Copy the token BotFather gives you (e.g. `7123456789:AAH...`)
+4. Send any message to your new bot
+5. Open `https://api.telegram.org/botYOUR_TOKEN/getUpdates` in your browser
+6. Find your chat ID in the response: `"chat":{"id":123456789}`
+7. Configure:
+
+```bash
+uv run .claude/skills/ap-autopilot/scripts/autopilot.py configure \
+  --telegram-token "YOUR_TOKEN" \
+  --telegram-chat-id "YOUR_CHAT_ID"
+```
+
 ## Quick Start
 
 ```bash
-# Configure (set Telegram bot, autonomy preset)
-uv run ap-autopilot/scripts/autopilot.py configure \
+# Configure (set autonomy preset, Telegram)
+uv run .claude/skills/ap-autopilot/scripts/autopilot.py configure \
   --preset checkpoint \
   --telegram-token "YOUR_TOKEN" \
   --telegram-chat-id "YOUR_CHAT_ID"
 
 # Run the autopilot
-uv run ap-autopilot/scripts/autopilot.py run
+uv run .claude/skills/ap-autopilot/scripts/autopilot.py run
+
+# Run a specific epic
+uv run .claude/skills/ap-autopilot/scripts/autopilot.py run --epic epic-1
+
+# Run a single story
+uv run .claude/skills/ap-autopilot/scripts/autopilot.py run --story 1-4-story-name
 
 # Check status
-uv run ap-autopilot/scripts/autopilot.py status
+uv run .claude/skills/ap-autopilot/scripts/autopilot.py status
+
+# Resume after a stop or crash
+uv run .claude/skills/ap-autopilot/scripts/autopilot.py resume
 ```
 
 ## Requirements
@@ -59,7 +86,7 @@ uv run ap-autopilot/scripts/autopilot.py status
 ## Module Structure
 
 ```
-ap-autopilot/     # Controller script - the autonomous loop
+ap-autopilot/     # Controller script -- the autonomous loop
 ap-dashboard/     # Sprint reporting (HTML/markdown)
 ap-setup/         # Installation and configuration
 ```
