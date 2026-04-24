@@ -1,0 +1,65 @@
+module_code: ap
+module_name: BMad Autopilot
+version: 1.0.0
+description: Autonomous orchestration module that runs BMad Phase 4 implementation workflows with configurable human involvement.
+expands: bmm
+greeting: |
+  BMad Autopilot is ready! Configure your autonomy preset and Telegram notifications, then run the autopilot to start building stories autonomously.
+
+  Quick start:
+    uv run skills/ap-autopilot/scripts/autopilot.py configure --preset checkpoint
+    uv run skills/ap-autopilot/scripts/autopilot.py run
+
+questions:
+  - key: autonomy_preset
+    prompt: "Autonomy level? Ghost (fully autonomous), Checkpoint (pauses at key gates), or Copilot (human approval at every step)"
+    type: single-select
+    options:
+      - value: ghost
+        label: "Ghost -- fully autonomous, only notifies on failures and merges"
+      - value: checkpoint
+        label: "Checkpoint -- pauses at configurable gates (recommended)"
+      - value: copilot
+        label: "Copilot -- human approval at every step"
+    default: checkpoint
+
+  - key: telegram_bot_token
+    prompt: "Telegram bot token (create via @BotFather in Telegram)"
+    default: ""
+    example: "7123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    user_setting: true
+
+  - key: telegram_chat_id
+    prompt: "Telegram chat ID (send a message to your bot, then visit https://api.telegram.org/bot<TOKEN>/getUpdates to find it)"
+    default: ""
+    example: "123456789"
+    user_setting: true
+
+  - key: retry_budget
+    prompt: "Max dev retries before escalating to Telegram"
+    default: "2"
+
+  - key: dashboard_format
+    prompt: "Dashboard output format"
+    type: single-select
+    options:
+      - value: html
+        label: "HTML -- self-contained, opens in any browser"
+      - value: markdown
+        label: "Markdown -- terminal-friendly, readable via cat"
+    default: html
+
+  - key: project_label
+    prompt: "Project name shown in Telegram messages"
+    default: ""
+    example: "my-project (defaults to folder name if empty)"
+
+directories:
+  - "_bmad-output/autopilot/runs"
+
+post-install-notes: |
+  To test your Telegram connection:
+    uv run skills/ap-autopilot/scripts/autopilot.py status
+
+  To start the autopilot:
+    uv run skills/ap-autopilot/scripts/autopilot.py run

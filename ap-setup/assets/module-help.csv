@@ -1,0 +1,10 @@
+module,phase,name,code,sequence,workflow-file,command,required,agent-name,agent-command,agent-display-name,agent-title,options,description,output-location,outputs
+BMad Autopilot,_meta,,,,,,false,,,,,,,https://docs.bmad-method.org/llms.txt,
+BMad Autopilot,anytime,Setup Autopilot,SU,,ap-setup,configure,false,,,,,,"Install and configure BMad Autopilot module settings, Telegram, and autonomy preset.",,config
+BMad Autopilot,4-implementation,Run Autopilot,AR,,ap-autopilot,run,false,,,,,,Execute the full story cycle for all remaining stories in a sprint.,implementation_artifacts,sprint status
+BMad Autopilot,4-implementation,Run Single Story,AS,,ap-autopilot,run-story,false,,,,,,Execute the create-dev-review cycle for one specific story.,implementation_artifacts,story branch
+BMad Autopilot,4-implementation,Resume Autopilot,AE,,ap-autopilot,resume,false,,,,,ap-autopilot:run,Pick up from where a crashed or stopped run left off.,implementation_artifacts,sprint status
+BMad Autopilot,anytime,Configure Autopilot,AC,,ap-autopilot,configure,false,,,,,,Set or update autonomy preset and notification settings.,,config
+BMad Autopilot,anytime,Autopilot Status,AT,,ap-autopilot,status,false,,,,,,Show current autopilot state and next story.,,
+BMad Autopilot,4-implementation,Generate Dashboard,AD,,ap-dashboard,report,false,,,,,,Generate a sprint run dashboard report (HTML or markdown).,implementation_artifacts,dashboard
+BMad Autopilot,anytime,Quick Sprint Summary,AQ,,ap-dashboard,summary,false,,,,,,Quick one-line-per-story status for Telegram or terminal.,,

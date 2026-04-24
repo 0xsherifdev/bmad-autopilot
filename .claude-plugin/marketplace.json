@@ -1,0 +1,21 @@
+{
+  "name": "bmad-autopilot",
+  "description": "Autonomous Phase 4 orchestration for BMad Method. Configurable autonomy presets, Telegram notifications, and sprint dashboard reporting.",
+  "version": "1.0.0",
+  "author": "Sherifdeen Adebayo",
+  "license": "MIT",
+  "homepage": "https://github.com/0xsherifdev/bmad-autopilot",
+  "repository": "https://github.com/0xsherifdev/bmad-autopilot",
+  "keywords": ["bmad", "autopilot", "autonomous", "orchestration", "phase4"],
+  "plugins": [
+    {
+      "source": ".",
+      "skills": [
+        "ap-autopilot",
+        "ap-dashboard",
+        "ap-setup"
+      ],
+      "version": "1.0.0"
+    }
+  ]
+}
