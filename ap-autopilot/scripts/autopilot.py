@@ -117,6 +117,7 @@ def ensure_gitignore(project_root: str):
     gitignore_path = Path(project_root) / ".gitignore"
     entries_needed = [
         "_bmad-output/autopilot/",
+        "_bmad/_autopilot.yaml",
     ]
 
     existing = ""

@@ -103,6 +103,8 @@ Collect these with sensible defaults. Present them all at once so the user can r
 
 ### Step 6: Save Configuration
 
+First, ensure `_bmad/_autopilot.yaml` is in the project's `.gitignore` -- it contains the Telegram bot token and must never be committed.
+
 Write the collected values to `{project-root}/_bmad/_autopilot.yaml`:
 
 ```yaml
