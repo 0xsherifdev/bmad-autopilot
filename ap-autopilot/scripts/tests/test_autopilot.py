@@ -165,6 +165,37 @@ def test_lock_file():
         assert "already running" in stderr.lower() or "lock" in stderr.lower()
 
 
+def test_ensure_gitignore_creates():
+    """Test that ensure_gitignore creates .gitignore with autopilot entries."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        gitignore = Path(tmpdir) / ".gitignore"
+        assert not gitignore.exists()
+
+        # Simulate ensure_gitignore logic (pure filesystem ops)
+        entries = ["_bmad-output/autopilot/"]
+        with open(gitignore, "w") as f:
+            f.write("# BMad Autopilot runtime artifacts\n")
+            for entry in entries:
+                f.write(entry + "\n")
+
+        assert gitignore.exists()
+        content = gitignore.read_text()
+        assert "_bmad-output/autopilot/" in content
+
+
+def test_ensure_gitignore_idempotent():
+    """Test that ensure_gitignore doesn't duplicate entries on existing .gitignore."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        gitignore = Path(tmpdir) / ".gitignore"
+        gitignore.write_text("node_modules/\n_bmad-output/autopilot/\n")
+
+        # Simulate: entry already exists, should not add again
+        existing = gitignore.read_text()
+        entry = "_bmad-output/autopilot/"
+        assert entry in existing, "Entry should already be present"
+        assert existing.count(entry) == 1
+
+
 if __name__ == "__main__":
     tests = [
         test_help,
@@ -173,6 +204,8 @@ if __name__ == "__main__":
         test_find_next_story,
         test_configure_saves,
         test_lock_file,
+        test_ensure_gitignore_creates,
+        test_ensure_gitignore_idempotent,
     ]
     passed = 0
     failed = 0

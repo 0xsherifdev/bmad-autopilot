@@ -58,7 +58,7 @@ Config is stored at `{project-root}/_bmad/_autopilot.yaml`. Set via the `configu
 | checkpoint | auto | ask | auto | ask |
 | copilot | ask | ask | ask | ask |
 
-Merge is always gated regardless of preset.
+Merge is always gated regardless of preset. At the merge gate, the autopilot pushes the branch to origin and creates a GitHub PR (if `gh` CLI is installed and authenticated). The Telegram notification includes the PR link. Approving the gate merges the PR via `gh pr merge`.
 
 **Config values:**
 
@@ -78,7 +78,8 @@ Merge is always gated regardless of preset.
 - **Lock file** at `_bmad-output/autopilot/autopilot.lock` prevents double-runs
 - **Run logs** at `_bmad-output/autopilot/runs/` for debugging
 - **Graceful shutdown** on SIGINT/SIGTERM -- finishes current step, updates status, notifies via Telegram
-- **Never merges without human approval**
+- **Never merges without human approval** -- merges go through GitHub PRs when `gh` CLI is available
+- **Auto-gitignore** -- ensures `_bmad-output/autopilot/` is gitignored in the target project
 - **Retry budget** prevents infinite loops on dev failures
 
 ## On Activation

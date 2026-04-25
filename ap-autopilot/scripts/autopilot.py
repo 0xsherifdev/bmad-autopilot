@@ -112,6 +112,27 @@ class RunLogger:
 # ---------------------------------------------------------------------------
 
 
+def ensure_gitignore(project_root: str):
+    """Ensure runtime output directories are gitignored in the target project."""
+    gitignore_path = Path(project_root) / ".gitignore"
+    entries_needed = [
+        "_bmad-output/autopilot/",
+    ]
+
+    existing = ""
+    if gitignore_path.exists():
+        existing = gitignore_path.read_text()
+
+    to_add = [e for e in entries_needed if e not in existing]
+    if to_add:
+        with open(gitignore_path, "a") as f:
+            if existing and not existing.endswith("\n"):
+                f.write("\n")
+            f.write("\n# BMad Autopilot runtime artifacts\n")
+            for entry in to_add:
+                f.write(entry + "\n")
+
+
 def acquire_lock(project_root: str) -> bool:
     """Acquire PID lock file. Returns False if another instance is running."""
     lock_path = Path(project_root) / LOCK_FILE
@@ -479,6 +500,110 @@ def checkout_main(project_root: str, logger: RunLogger) -> bool:
     return ok
 
 
+def get_main_branch(project_root: str) -> str:
+    """Detect the default branch name (main or master)."""
+    ok, branch = git(["symbolic-ref", "refs/remotes/origin/HEAD"], project_root)
+    if ok:
+        return branch.replace("refs/remotes/origin/", "")
+    # Fallback: check if main exists
+    ok, _ = git(["rev-parse", "--verify", "main"], project_root)
+    return "main" if ok else "master"
+
+
+def push_branch(branch: str, project_root: str, logger: RunLogger) -> bool:
+    """Push a branch to origin."""
+    logger.info(f"Pushing branch: {branch}")
+    ok, output = git(["push", "-u", "origin", branch], project_root)
+    if not ok:
+        logger.error(f"Failed to push branch: {output}")
+    return ok
+
+
+def has_gh_cli() -> bool:
+    """Check if the GitHub CLI (gh) is installed and authenticated."""
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "status"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def create_pr(
+    story_id: str,
+    branch: str,
+    base_branch: str,
+    project_root: str,
+    logger: RunLogger,
+    diff_stat: str,
+) -> str | None:
+    """Create a GitHub PR using gh CLI. Returns the PR URL or None on failure."""
+    story_location = "_bmad-output/implementation-artifacts"
+    title = f"feat: implement {story_id}"
+    body = (
+        f"## Story: `{story_id}`\n\n"
+        f"Spec: `{story_location}/{story_id}.md`\n\n"
+        f"## Changes\n```\n{diff_stat[:1000]}\n```\n\n"
+        f"---\n*Created by BMad Autopilot*"
+    )
+
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "create",
+             "--title", title,
+             "--body", body,
+             "--base", base_branch,
+             "--head", branch],
+            capture_output=True, text=True,
+            cwd=project_root, timeout=30,
+        )
+        if result.returncode == 0:
+            pr_url = result.stdout.strip()
+            logger.info(f"PR created: {pr_url}")
+            return pr_url
+        else:
+            logger.error(f"gh pr create failed: {result.stderr[:300]}")
+            return None
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        logger.error(f"gh pr create error: {e}")
+        return None
+
+
+def merge_pr(pr_url: str, project_root: str, logger: RunLogger) -> bool:
+    """Merge a PR using gh CLI. Returns True on success."""
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "merge", pr_url, "--merge", "--delete-branch"],
+            capture_output=True, text=True,
+            cwd=project_root, timeout=30,
+        )
+        if result.returncode == 0:
+            logger.info(f"PR merged: {pr_url}")
+            return True
+        else:
+            logger.error(f"gh pr merge failed: {result.stderr[:300]}")
+            return False
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        logger.error(f"gh pr merge error: {e}")
+        return False
+
+
+def get_repo_url(project_root: str) -> str | None:
+    """Get the GitHub repo URL from git remote."""
+    ok, remote = git(["remote", "get-url", "origin"], project_root)
+    if not ok:
+        return None
+    # Normalize SSH to HTTPS
+    url = remote.strip()
+    if url.startswith("git@github.com:"):
+        url = url.replace("git@github.com:", "https://github.com/")
+    if url.endswith(".git"):
+        url = url[:-4]
+    return url
+
+
 # ---------------------------------------------------------------------------
 # Story cycle
 # ---------------------------------------------------------------------------
@@ -641,39 +766,89 @@ def run_story_cycle(
             checkout_main(project_root, logger)
             return False
 
-    # --- Step 5: Merge Gate (always) ---
-    logger.info("Step 5: Merge gate")
+    # --- Step 5: Push & PR ---
+    logger.info("Step 5: Push branch and create PR")
+
+    branch = f"story/{story_id}"
+    base_branch = get_main_branch(project_root)
 
     # Get summary of changes
-    _, diff_stat = git(["diff", "--stat", f"main...story/{story_id}"], project_root)
+    _, diff_stat = git(["diff", "--stat", f"{base_branch}...{branch}"], project_root)
 
-    response = notifier.ask(
-        f"Story `{story_id}` ready to merge.\n\n"
-        f"Changes:\n```\n{diff_stat[:500]}\n```"
-    )
+    # Push branch to remote
+    if not push_branch(branch, project_root, logger):
+        notifier.send(f"Failed to push branch `{branch}`. Merge manually.")
+        checkout_main(project_root, logger)
+        return False
+
+    # Create PR if gh CLI is available
+    pr_url = None
+    use_gh = has_gh_cli()
+
+    if use_gh:
+        pr_url = create_pr(story_id, branch, base_branch, project_root, logger, diff_stat)
+
+    # Build the notification message
+    if pr_url:
+        gate_msg = (
+            f"PR created for `{story_id}`:\n"
+            f"{pr_url}\n\n"
+            f"Changes:\n```\n{diff_stat[:500]}\n```"
+        )
+    else:
+        # Fallback: link to the branch on GitHub
+        repo_url = get_repo_url(project_root)
+        branch_url = f"{repo_url}/tree/{branch}" if repo_url else None
+        link_text = f"\n{branch_url}" if branch_url else ""
+        gate_msg = (
+            f"Branch `{branch}` pushed for `{story_id}`.{link_text}\n\n"
+            f"Changes:\n```\n{diff_stat[:500]}\n```\n\n"
+            f"_Create a PR manually if needed._"
+        )
+
+    # --- Merge Gate (always) ---
+    response = notifier.ask(gate_msg)
 
     if response == "stop":
         logger.info("User declined merge")
-        notifier.send(f"Merge declined for `{story_id}`. Branch preserved: `story/{story_id}`")
+        notifier.send(f"Merge declined for `{story_id}`. PR/branch preserved.")
         checkout_main(project_root, logger)
         return False
 
     if response == "go":
-        # Merge
-        checkout_main(project_root, logger)
-        ok, merge_output = git(["merge", "--no-ff", f"story/{story_id}"], project_root)
-        if ok:
-            logger.info(f"Merged story/{story_id} to main")
-            update_story_status(sprint_status_path, story_id, "done")
-            notifier.send(f"Merged `{story_id}` to main.")
+        if use_gh and pr_url:
+            # Merge via gh CLI
+            if merge_pr(pr_url, project_root, logger):
+                # Pull the merged changes locally
+                checkout_main(project_root, logger)
+                git(["pull", "origin", base_branch], project_root)
+                update_story_status(sprint_status_path, story_id, "done")
+                notifier.send(f"PR merged for `{story_id}`.")
+            else:
+                logger.error("gh pr merge failed")
+                notifier.send(
+                    f"Auto-merge failed for `{story_id}`. "
+                    f"Merge manually: {pr_url}"
+                )
+                checkout_main(project_root, logger)
+                return False
         else:
-            logger.error(f"Merge failed: {merge_output}")
-            notifier.send(f"Merge FAILED for `{story_id}`: {merge_output[:300]}")
-            return False
+            # No gh CLI -- fall back to local merge
+            checkout_main(project_root, logger)
+            ok, merge_output = git(["merge", "--no-ff", branch], project_root)
+            if ok:
+                logger.info(f"Merged {branch} to {base_branch}")
+                git(["push", "origin", base_branch], project_root)
+                update_story_status(sprint_status_path, story_id, "done")
+                notifier.send(f"Merged `{story_id}` to {base_branch}.")
+            else:
+                logger.error(f"Merge failed: {merge_output}")
+                notifier.send(f"Merge FAILED for `{story_id}`: {merge_output[:300]}")
+                return False
     else:
         # Timeout or no response
-        logger.warn("No response at merge gate, leaving branch unmerged")
-        notifier.send(f"No response at merge gate for `{story_id}`. Branch preserved.")
+        logger.warn("No response at merge gate, PR/branch preserved")
+        notifier.send(f"No response at merge gate for `{story_id}`. PR/branch preserved.")
         checkout_main(project_root, logger)
         return False
 
@@ -702,6 +877,9 @@ def cmd_run(args, project_root: str):
     if not Path(sprint_path).exists():
         logger.error(f"Sprint status not found: {sprint_path}")
         sys.exit(2)
+
+    # Ensure runtime artifacts are gitignored
+    ensure_gitignore(project_root)
 
     # Acquire lock
     if not acquire_lock(project_root):
